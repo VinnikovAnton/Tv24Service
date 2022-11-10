@@ -5,6 +5,8 @@ import { AuthError } from './interfaces/autherror';
 import { AuthResult } from './interfaces/authresult';
 import { ContError } from './interfaces/conterror';
 import { ContSuccess } from './interfaces/contsuccess';
+import { StatusError } from './interfaces/statuserror';
+import { StatusSuccess } from './interfaces/statussuccess';
 
 var winston = require('winston');
 require('winston-daily-rotate-file');
@@ -50,7 +52,7 @@ export class AppController {
     console.log('AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id);
     logger.info('AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id);
     const r = await this.service.auth(phone, logger);
-    if (r === null) {
+    if ((r === null) || (r.user_id === null)) {
       let e: AuthError = new AuthError();
       e.status = -1;
       e.err = 404;
@@ -77,15 +79,76 @@ export class AppController {
   async cont(@Res() res, @Query('user_id') user_id: number, @Query('sum') sum: number, @Query('cont_id') cont_id: number, @Query('trf_id') trf_id: number, @Query('message') message: string, @Query('start') start: string): Promise<ContSuccess | ContError> {
     console.log('CONT: user_id = ' + user_id + ', sum = ' + sum + ', id = ' + cont_id + ', tariff = ' + message + '(' + trf_id + '), from = ' + start);
     logger.info('CONT: user_id = ' + user_id + ', sum = ' + sum + ', id = ' + cont_id + ', tariff = ' + message + '(' + trf_id + '), from = ' + start);
-    let r = await this.service.cont(user_id, sum, message, start, logger);
-    if (r === null) {
+    let r = await this.service.cont(user_id, sum, trf_id, message, start, logger);
+    if (r.status < 0) {
       let e: ContError = new ContError();
-      e.status = -2;
-      e.errmsg = 'Недостаточно денежных средств';
+      e.status = r.status;
+      if (e.status == -1) {
+        e.errmsg = 'Абонент [' + user_id + '] не найден';
+      }
+      if (e.status == -2) {
+        e.errmsg = 'Недостаточно денежных средств';
+      }
       console.log('FAIL: ' + e.errmsg);
       logger.info('FAIL: ' + e.errmsg);
       return res.status(HttpStatus.OK).json(e);
     }
     return res.status(HttpStatus.OK).json(r);
   }
+
+  @Post('packet?')
+  @ApiOperation({description: 'Запрос на подключение пакета', summary: 'Запрос на подключение пакета'})
+  @ApiQuery({name: 'user_id', type: 'number', description: 'ID пользователя', required: true})
+  @ApiQuery({name: 'trf_id', type: 'number', description: 'ID тарифа', required: false})
+  @ApiResponse({ type: StatusSuccess })
+  @ApiOkResponse({ description: 'Successfully.'})
+  async packet(@Res() res, @Query('user_id') user_id: number, @Query('trf_id') trf_id: number): Promise<StatusSuccess | StatusError> {
+    console.log('PACKET: user_id = ' + user_id + ', tariff = ' + trf_id);
+    logger.info('PACKET: user_id = ' + user_id + ', tariff = ' + trf_id);
+    let r = await this.service.packet(user_id, trf_id, logger);
+    if (r.status < 0) {
+      let e: StatusError = new StatusError();
+      e.status = r.status;
+      if (e.status == -1) {
+        e.errmsg = 'Абонент [' + user_id + '] не найден';
+      }
+      if (e.status == -2) {
+        e.errmsg = 'Недостаточно денежных средств';
+      }
+      if (e.status == -3) {
+        e.errmsg = 'Тариф не найден';
+      }
+      console.log('FAIL: ' + e.errmsg);
+      logger.info('FAIL: ' + e.errmsg);
+      return res.status(HttpStatus.OK).json(e);
+    }
+    return res.status(HttpStatus.OK).json(r);
+  }
+
+  @Post('delete_subscription?')
+  @ApiOperation({description: 'Запрос на удаление подписки', summary: 'Запрос на подключение пакета'})
+  @ApiQuery({name: 'user_id', type: 'number', description: 'ID пользователя', required: true})
+  @ApiQuery({name: 'sub_id', type: 'number', description: 'ID подписки', required: false})
+  @ApiResponse({ type: StatusSuccess })
+  @ApiOkResponse({ description: 'Successfully.'})
+  async del(@Res() res, @Query('user_id') user_id: number, @Query('sub_id') sub_id: number): Promise<StatusSuccess | StatusError> {
+    console.log('DELETE_SUBSCRIPTION: user_id = ' + user_id + ', tariff = ' + sub_id);
+    logger.info('DELETE_SUBSCRIPTION: user_id = ' + user_id + ', tariff = ' + sub_id);
+    let r = await this.service.del(user_id, sub_id, logger);
+    if (r.status < 0) {
+      let e: StatusError = new StatusError();
+      e.status = r.status;
+      if (e.status == -1) {
+        e.errmsg = 'Абонент [' + user_id + '] не найден';
+      }
+      if (e.status == -4) {
+        e.errmsg = 'Подписка не найдена';
+      }
+      console.log('FAIL: ' + e.errmsg);
+      logger.info('FAIL: ' + e.errmsg);
+      return res.status(HttpStatus.OK).json(e);
+    }
+    return res.status(HttpStatus.OK).json(r);
+  }
+
 }
