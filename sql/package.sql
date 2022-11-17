@@ -73,7 +73,8 @@ CREATE OR REPLACE type tv24_abonent_rec is object (
    last_name varchar2(500),
    phone varchar2(100),
    email varchar2(500),
-   provider_id number
+   provider_id number,
+   is_active number(1)
 )
 /
 
@@ -115,6 +116,8 @@ create or replace package PDriverTv24 as
   function getCurrSubscriptions(pId in number) return tv24_subscription_list pipelined;
   function getSubscriptions(pId in number) return tv24_subscription_list pipelined;
   function getPauses(pId in number, pSub in varchar2) return tv24_pause_list pipelined;
+
+  function setAbonentActive(pId in number, pActive in number) return tv24_abonent_list pipelined;
 end;
 /
 
@@ -154,6 +157,44 @@ create or replace package body PDriverTv24 as
     o_result := vResp.status_code;
   end;
 
+  procedure postMethod( pUrl     in  varchar2
+                      , pText    in  varchar2 default null
+                      , pMethod  in  varchar2 default 'POST'
+                      , pFormat  in  varchar2 default 'json'
+                      , pCharset in  varchar2 default ';charset=windows-1251'
+                      , oOut     out nclob 
+                      , oResult  out number ) as
+    vReq  utl_http.req;
+    vResp utl_http.resp;
+    vBuff raw(32767);
+    vCbuf nclob default empty_clob;
+  begin
+    utl_http.set_response_error_check(FALSE);
+    vReq := utl_http.begin_request(SERVICE_URL || pUrl || 'token=' || TOKEN, pMethod);
+    utl_http.set_header(vReq, 'User-Agent', 'Mozilla/4.0'); 
+    utl_http.set_header(vReq, 'Content-Type', 'application/' || pFormat || pCharset);
+    if not pText is null then 
+       utl_http.set_header(vReq, 'Content-Length', length(pText));
+       utl_http.write_text(vReq, pText);
+    end if;    
+    vResp := utl_http.get_response(vReq);
+    begin
+      loop
+        utl_http.read_raw(vResp, vBuff, 32766);
+        vCbuf := vCbuf || utl_raw.cast_to_varchar2(vBuff);
+      end loop;
+    exception
+      when utl_http.END_OF_BODY then
+        null;
+      when others then
+        utl_http.end_response(vResp);
+        raise;
+    end;  
+    utl_http.end_response(vResp);
+    oOut := vCbuf; 
+    oResult := vResp.status_code;
+  end;
+
   function getString(pNode in JSON_OBJECT_T, pName in varchar2) return varchar2 as
     vRes varchar2(1000) default '';
   begin
@@ -163,6 +204,49 @@ create or replace package body PDriverTv24 as
     return vRes;
   end;
   
+  function setAbonentActive(pId in number, pActive in number) return tv24_abonent_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '?'; 
+    vResp  clob;
+    vCode  number;
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_abonent_rec;
+    vId    number;
+    vUid   number;
+    vName  varchar2(500);
+    vFirst varchar2(500);
+    vLast  varchar2(500);
+    vPhone varchar2(100);
+    vEMail varchar2(500);
+    vActiv number default 0;
+    vText  varchar2(100) default '{"is_active":';
+  begin
+    if pActive > 0 then
+       vText := vText || 'true}';
+    else
+       vText := vText || 'false}';
+    end if;
+    postMethod(pUrl => vUrl, pText => vText, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := vNode.get_Number('id');
+       vUid   := vNode.get_Number('provider_uid');
+       vName  := getString(vNode, 'username'); 
+       vFirst := getString(vNode, 'first_name'); 
+       vLast  := getString(vNode, 'last_name');
+       vPhone := getString(vNode, 'phone'); 
+       vEMail := getString(vNode, 'email');
+       if vNode.get_Boolean('is_active') then
+          vActiv := 1;
+       end if; 
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+       pipe row(vRec);
+    else
+       vRec   := tv24_abonent_rec(vCode, vResp, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+       pipe row(vRec);
+    end if;
+    return;  
+  end; 
+
   function getPauses(pId in number, pSub in varchar2) return tv24_pause_list pipelined as
     vUrl   varchar2(100) default 'users/' || pId || '/subscriptions/' || pSub || '/pauses?'; 
     vResp  clob;
@@ -295,6 +379,7 @@ create or replace package body PDriverTv24 as
     vLast  varchar2(500);
     vPhone varchar2(100);
     vEMail varchar2(500);
+    vActiv number default 0;
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -308,7 +393,10 @@ create or replace package body PDriverTv24 as
            vLast  := getString(vNode, 'last_name');
            vPhone := getString(vNode, 'phone'); 
            vEMail := getString(vNode, 'email');
-           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid);
+           if vNode.get_Boolean('is_active') then
+              vActiv := 1;
+           end if; 
+           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
            pipe row(vRec);
        end loop; 
     end if;
@@ -329,6 +417,7 @@ create or replace package body PDriverTv24 as
     vLast  varchar2(500);
     vPhone varchar2(100);
     vEMail varchar2(500);
+    vActiv number default 0;
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -342,7 +431,10 @@ create or replace package body PDriverTv24 as
            vLast  := getString(vNode, 'last_name');
            vPhone := getString(vNode, 'phone'); 
            vEMail := getString(vNode, 'email');
-           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid);
+           if vNode.get_Boolean('is_active') then
+              vActiv := 1;
+           end if; 
+           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
            pipe row(vRec);
        end loop; 
     end if;
@@ -362,6 +454,7 @@ create or replace package body PDriverTv24 as
     vLast  varchar2(500);
     vPhone varchar2(100);
     vEMail varchar2(500);
+    vActiv number default 0;
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -373,7 +466,10 @@ create or replace package body PDriverTv24 as
        vLast  := getString(vNode, 'last_name');
        vPhone := getString(vNode, 'phone'); 
        vEMail := getString(vNode, 'email');
-       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid);
+       if vNode.get_Boolean('is_active') then
+          vActiv := 1;
+       end if; 
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
        pipe row(vRec);
     end if;
     return;  
@@ -393,6 +489,7 @@ create or replace package body PDriverTv24 as
     vLast  varchar2(500);
     vPhone varchar2(100);
     vEMail varchar2(500);
+    vActiv number default 0;
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -406,7 +503,10 @@ create or replace package body PDriverTv24 as
            vLast  := getString(vNode, 'last_name');
            vPhone := getString(vNode, 'phone'); 
            vEMail := getString(vNode, 'email');
-           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid);
+           if vNode.get_Boolean('is_active') then
+              vActiv := 1;
+           end if; 
+           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
            pipe row(vRec);
        end loop; 
     end if;
