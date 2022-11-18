@@ -87,8 +87,8 @@ CREATE OR REPLACE type tv24_subscription_rec is object (
    packet varchar2(100),
    price number,
    is_base number(1),
-   id_renew number(1),
-   id_paused number(1),
+   is_renew number(1),
+   is_paused number(1),
    start_at date,
    end_at date
 )
@@ -116,8 +116,16 @@ create or replace package PDriverTv24 as
   function getCurrSubscriptions(pId in number) return tv24_subscription_list pipelined;
   function getSubscriptions(pId in number) return tv24_subscription_list pipelined;
   function getPauses(pId in number, pSub in varchar2) return tv24_pause_list pipelined;
-
+  
+  function setAbonentProvider(pId in number, pUid in number) return tv24_abonent_list pipelined;
   function setAbonentActive(pId in number, pActive in number) return tv24_abonent_list pipelined;
+  function setAbonentPacketPrice(pId in number, pPacket in number, pPrice in number) return tv24_package_list pipelined;
+  function addSubscription(pId in number, pPacket in number, pRenew in number default 1) return tv24_subscription_list pipelined;
+  function delSubscription(pId in number, pSub in number) return tv24_subscription_list pipelined;
+  function addPause(pId in number, pSub in number, pStart in date default sysdate, pEnd in date default null) return tv24_pause_list pipelined;
+  function addPausesAll(pId in number, pStart in date default sysdate, pEnd in date default null) return tv24_pause_list pipelined;
+  function delPause(pId in number, pSub in number, pPause in varchar2) return tv24_pause_list pipelined;
+  function delPausesAll(pId in number, pPause in varchar2) return tv24_pause_list pipelined;
 end;
 /
 
@@ -204,10 +212,107 @@ create or replace package body PDriverTv24 as
     return vRes;
   end;
   
-  function setAbonentActive(pId in number, pActive in number) return tv24_abonent_list pipelined as
+  function delSubscription(pId in number, pSub in number) return tv24_subscription_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/subscriptions/' || pSub || '?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vList  JSON_ARRAY_T;
+    vNode  JSON_OBJECT_T;
+    vPack  JSON_OBJECT_T;
+    vRec   tv24_subscription_rec;
+    vId    varchar2(100);
+    vPId   number;
+    vPName varchar2(100);
+    vPrice number;
+    vBase  number default 0;
+    vRenew number default 0;
+    vPause number default 0;
+    vStart Date;
+    vEnd   Date;
+  begin
+    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vList := JSON_ARRAY_T.parse(vResp);
+       for ix IN 0 .. vList.get_size - 1 loop
+           vNode  := TREAT(vList.get(ix) AS json_object_t);
+           vId    := getString(vNode, 'id');
+           vStart := vNode.get_Timestamp('start_at');
+           vEnd   := vNode.get_Timestamp('end_at');
+           if vNode.get_Boolean('renew') then
+              vRenew := 1;
+           end if;
+           if vNode.get_Boolean('is_paused') then
+              vPause := 1;
+           end if;
+           vPack  := vNode.get_Object('packet');
+           vPId   := vPack.get_Number('id');
+           vPName := getString(vPack, 'name');
+           vPrice := vPack.get_Number('price');
+           if vPack.get_Boolean('base') then
+              vBase := 1;
+           end if;
+           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd);
+           pipe row(vRec);
+       end loop; 
+    end if;
+    return;  
+  end;
+  
+  function addSubscription(pId in number, pPacket in number, pRenew in number default 1) return tv24_subscription_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/subscriptions?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vList  JSON_ARRAY_T;
+    vNode  JSON_OBJECT_T;
+    vPack  JSON_OBJECT_T;
+    vRec   tv24_subscription_rec;
+    vId    varchar2(100);
+    vPId   number;
+    vPName varchar2(100);
+    vPrice number;
+    vBase  number default 0;
+    vRenew number default 0;
+    vPause number default 0;
+    vStart Date;
+    vEnd   Date;
+  begin
+    vBody.put('packet_id', pPacket);
+    vBody.put('renew', pRenew > 0);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vList := JSON_ARRAY_T.parse(vResp);
+       for ix IN 0 .. vList.get_size - 1 loop
+           vNode  := TREAT(vList.get(ix) AS json_object_t);
+           vId    := getString(vNode, 'id');
+           vStart := vNode.get_Timestamp('start_at');
+           vEnd   := vNode.get_Timestamp('end_at');
+           if vNode.get_Boolean('renew') then
+              vRenew := 1;
+           end if;
+           if vNode.get_Boolean('is_paused') then
+              vPause := 1;
+           end if;
+           vPack  := vNode.get_Object('packet');
+           vPId   := vPack.get_Number('id');
+           vPName := getString(vPack, 'name');
+           vPrice := vPack.get_Number('price');
+           if vPack.get_Boolean('base') then
+              vBase := 1;
+           end if;
+           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd);
+           pipe row(vRec);
+       end loop; 
+    end if;
+    return;  
+  end;
+  
+  function setAbonentProvider(pId in number, pUid in number) return tv24_abonent_list pipelined as
     vUrl   varchar2(100) default 'users/' || pId || '?'; 
     vResp  clob;
     vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
     vNode  JSON_OBJECT_T;
     vRec   tv24_abonent_rec;
     vId    number;
@@ -218,14 +323,9 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
-    vText  varchar2(100) default '{"is_active":';
   begin
-    if pActive > 0 then
-       vText := vText || 'true}';
-    else
-       vText := vText || 'false}';
-    end if;
-    postMethod(pUrl => vUrl, pText => vText, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
+    vBody.put('provider_uid', pUid);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
     if vCode = 200 then
        vNode := JSON_OBJECT_T.parse(vResp);
        vId    := vNode.get_Number('id');
@@ -240,12 +340,151 @@ create or replace package body PDriverTv24 as
        end if; 
        vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
        pipe row(vRec);
-    else
-       vRec   := tv24_abonent_rec(vCode, vResp, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+    end if;
+    return;  
+  end; 
+  
+  function setAbonentActive(pId in number, pActive in number) return tv24_abonent_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_abonent_rec;
+    vId    number;
+    vUid   number;
+    vName  varchar2(500);
+    vFirst varchar2(500);
+    vLast  varchar2(500);
+    vPhone varchar2(100);
+    vEMail varchar2(500);
+    vActiv number default 0;
+  begin
+    vBody.put('is_active', pActive > 0);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := vNode.get_Number('id');
+       vUid   := vNode.get_Number('provider_uid');
+       vName  := getString(vNode, 'username'); 
+       vFirst := getString(vNode, 'first_name'); 
+       vLast  := getString(vNode, 'last_name');
+       vPhone := getString(vNode, 'phone'); 
+       vEMail := getString(vNode, 'email');
+       if vNode.get_Boolean('is_active') then
+          vActiv := 1;
+       end if; 
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
        pipe row(vRec);
     end if;
     return;  
   end; 
+
+  function addPause(pId in number, pSub in number, pStart in date default sysdate, pEnd in date default null) return tv24_pause_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/subscriptions/' || pSub || '/pauses?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vList  JSON_ARRAY_T;
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_pause_rec;
+    vId    varchar2(100);
+    vStart Date;
+    vEnd   Date;
+  begin
+    vBody.put('start_at', pStart);
+    vBody.put('end_at', pEnd);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := getString(vNode, 'id');
+       vStart := vNode.get_Timestamp('start_at');
+       vEnd   := vNode.get_Timestamp('end_at');
+       vRec   := tv24_pause_rec(vId, vStart, vEnd);
+       pipe row(vRec);
+    end if;
+    return;  
+  end;
+
+  function delPause(pId in number, pSub in number, pPause in varchar2) return tv24_pause_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/subscriptions/' || pSub || '/pauses/' || pPause || '?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vList  JSON_ARRAY_T;
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_pause_rec;
+    vId    varchar2(100);
+    vStart Date;
+    vEnd   Date;
+  begin
+    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := getString(vNode, 'id');
+       vStart := vNode.get_Timestamp('start_at');
+       vEnd   := vNode.get_Timestamp('end_at');
+       vRec   := tv24_pause_rec(vId, vStart, vEnd);
+       pipe row(vRec);
+    end if;
+    return;  
+  end;
+
+  function addPausesAll(pId in number, pStart in date default sysdate, pEnd in date default null) return tv24_pause_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/pauses?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vList  JSON_ARRAY_T;
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_pause_rec;
+    vId    varchar2(100);
+    vStart Date;
+    vEnd   Date;
+  begin
+    vBody.put('start_at', pStart);
+    vBody.put('end_at', pEnd);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vList := JSON_ARRAY_T.parse(vResp);
+       for ix IN 0 .. vList.get_size - 1 loop
+           vNode  := TREAT(vList.get(ix) AS json_object_t);
+           vId    := getString(vNode, 'id');
+           vStart := vNode.get_Timestamp('start_at');
+           vEnd   := vNode.get_Timestamp('end_at');
+           vRec   := tv24_pause_rec(vId, vStart, vEnd);
+           pipe row(vRec);
+       end loop; 
+    end if;
+    return;  
+  end;
+
+  function delPausesAll(pId in number, pPause in varchar2) return tv24_pause_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/pauses/' || pPause || '?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vList  JSON_ARRAY_T;
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_pause_rec;
+    vId    varchar2(100);
+    vStart Date;
+    vEnd   Date;
+  begin
+    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vList := JSON_ARRAY_T.parse(vResp);
+       for ix IN 0 .. vList.get_size - 1 loop
+           vNode  := TREAT(vList.get(ix) AS json_object_t);
+           vId    := getString(vNode, 'id');
+           vStart := vNode.get_Timestamp('start_at');
+           vEnd   := vNode.get_Timestamp('end_at');
+           vRec   := tv24_pause_rec(vId, vStart, vEnd);
+           pipe row(vRec);
+       end loop; 
+    end if;
+    return;  
+  end;
 
   function getPauses(pId in number, pSub in varchar2) return tv24_pause_list pipelined as
     vUrl   varchar2(100) default 'users/' || pId || '/subscriptions/' || pSub || '/pauses?'; 
@@ -512,6 +751,31 @@ create or replace package body PDriverTv24 as
     end if;
     return;  
   end;
+  
+  function setAbonentPacketPrice(pId in number, pPacket in number, pPrice in number) return tv24_package_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '/packets?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_package_rec;
+    vName  varchar2(100);
+    vDesc  varchar2(2000);
+    vPrice number;
+  begin
+    vBody.put('price', pPrice);
+    vBody.put('packet_id', pPacket);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vName  := getString(vNode, 'name'); 
+       vDesc  := getString(vNode, 'description');
+       vPrice := vNode.get_Number('price');
+       vRec   := tv24_package_rec(null, null, vName, vDesc, vPrice, null);
+       pipe row(vRec);
+    end if;
+    return;  
+  end; 
   
   function getPackages return tv24_package_list pipelined as
     vUrl   varchar2(100) default 'packets?includes=availables&'; 
