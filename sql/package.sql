@@ -59,7 +59,9 @@ CREATE OR REPLACE type tv24_package_rec is object (
    name varchar2(100),
    description varchar2(1000),
    price number,
-   base number
+   base number,
+   http_code number,
+   error_message varchar2(1000)
 )
 /
 
@@ -74,7 +76,9 @@ CREATE OR REPLACE type tv24_abonent_rec is object (
    phone varchar2(100),
    email varchar2(500),
    provider_id number,
-   is_active number(1)
+   is_active number(1),
+   http_code number,
+   error_message varchar2(1000)
 )
 /
 
@@ -90,7 +94,9 @@ CREATE OR REPLACE type tv24_subscription_rec is object (
    is_renew number(1),
    is_paused number(1),
    start_at date,
-   end_at date
+   end_at date,
+   http_code number,
+   error_message varchar2(1000)
 )
 /
 
@@ -100,7 +106,9 @@ CREATE OR REPLACE type tv24_subscription_list is table of tv24_subscription_rec
 CREATE OR REPLACE type tv24_pause_rec is object (
    id varchar2(100),
    start_at date,
-   end_at date
+   end_at date,
+   http_code number,
+   error_message varchar2(1000)
 )
 /
 
@@ -230,6 +238,7 @@ create or replace package body PDriverTv24 as
     vPause number default 0;
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
     if vCode = 200 then
@@ -252,9 +261,13 @@ create or replace package body PDriverTv24 as
            if vPack.get_Boolean('base') then
               vBase := 1;
            end if;
-           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd);
+           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -277,6 +290,7 @@ create or replace package body PDriverTv24 as
     vPause number default 0;
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     vBody.put('packet_id', pPacket);
     vBody.put('renew', pRenew > 0);
@@ -301,9 +315,13 @@ create or replace package body PDriverTv24 as
            if vPack.get_Boolean('base') then
               vBase := 1;
            end if;
-           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd);
+           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -323,6 +341,7 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
+    vDetail varchar2(1000);
   begin
     vBody.put('provider_uid', pUid);
     postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
@@ -338,7 +357,11 @@ create or replace package body PDriverTv24 as
        if vNode.get_Boolean('is_active') then
           vActiv := 1;
        end if; 
-       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
@@ -359,6 +382,7 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
+    vDetail varchar2(1000);
   begin
     vBody.put('is_active', pActive > 0);
     postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
@@ -374,7 +398,11 @@ create or replace package body PDriverTv24 as
        if vNode.get_Boolean('is_active') then
           vActiv := 1;
        end if; 
-       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
@@ -391,6 +419,7 @@ create or replace package body PDriverTv24 as
     vId    varchar2(100);
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     vBody.put('start_at', pStart);
     vBody.put('end_at', pEnd);
@@ -400,7 +429,11 @@ create or replace package body PDriverTv24 as
        vId    := getString(vNode, 'id');
        vStart := vNode.get_Timestamp('start_at');
        vEnd   := vNode.get_Timestamp('end_at');
-       vRec   := tv24_pause_rec(vId, vStart, vEnd);
+       vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
@@ -417,6 +450,7 @@ create or replace package body PDriverTv24 as
     vId    varchar2(100);
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
     if vCode = 200 then
@@ -424,7 +458,11 @@ create or replace package body PDriverTv24 as
        vId    := getString(vNode, 'id');
        vStart := vNode.get_Timestamp('start_at');
        vEnd   := vNode.get_Timestamp('end_at');
-       vRec   := tv24_pause_rec(vId, vStart, vEnd);
+       vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
@@ -441,6 +479,7 @@ create or replace package body PDriverTv24 as
     vId    varchar2(100);
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     vBody.put('start_at', pStart);
     vBody.put('end_at', pEnd);
@@ -452,9 +491,13 @@ create or replace package body PDriverTv24 as
            vId    := getString(vNode, 'id');
            vStart := vNode.get_Timestamp('start_at');
            vEnd   := vNode.get_Timestamp('end_at');
-           vRec   := tv24_pause_rec(vId, vStart, vEnd);
+           vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -470,6 +513,7 @@ create or replace package body PDriverTv24 as
     vId    varchar2(100);
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
     if vCode = 200 then
@@ -479,9 +523,13 @@ create or replace package body PDriverTv24 as
            vId    := getString(vNode, 'id');
            vStart := vNode.get_Timestamp('start_at');
            vEnd   := vNode.get_Timestamp('end_at');
-           vRec   := tv24_pause_rec(vId, vStart, vEnd);
+           vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -496,6 +544,7 @@ create or replace package body PDriverTv24 as
     vId    varchar2(100);
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -505,9 +554,13 @@ create or replace package body PDriverTv24 as
            vId    := getString(vNode, 'id');
            vStart := vNode.get_Timestamp('start_at');
            vEnd   := vNode.get_Timestamp('end_at');
-           vRec   := tv24_pause_rec(vId, vStart, vEnd);
+           vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -529,6 +582,7 @@ create or replace package body PDriverTv24 as
     vPause number default 0;
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -551,9 +605,13 @@ create or replace package body PDriverTv24 as
            if vPack.get_Boolean('base') then
               vBase := 1;
            end if;
-           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd);
+           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -575,6 +633,7 @@ create or replace package body PDriverTv24 as
     vPause number default 0;
     vStart Date;
     vEnd   Date;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -597,9 +656,13 @@ create or replace package body PDriverTv24 as
            if vPack.get_Boolean('base') then
               vBase := 1;
            end if;
-           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd);
+           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -619,6 +682,7 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -635,9 +699,13 @@ create or replace package body PDriverTv24 as
            if vNode.get_Boolean('is_active') then
               vActiv := 1;
            end if; 
-           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -657,6 +725,7 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -673,9 +742,13 @@ create or replace package body PDriverTv24 as
            if vNode.get_Boolean('is_active') then
               vActiv := 1;
            end if; 
-           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -694,6 +767,7 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -708,7 +782,11 @@ create or replace package body PDriverTv24 as
        if vNode.get_Boolean('is_active') then
           vActiv := 1;
        end if; 
-       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
@@ -729,6 +807,7 @@ create or replace package body PDriverTv24 as
     vPhone varchar2(100);
     vEMail varchar2(500);
     vActiv number default 0;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -745,9 +824,13 @@ create or replace package body PDriverTv24 as
            if vNode.get_Boolean('is_active') then
               vActiv := 1;
            end if; 
-           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv);
+           vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
            pipe row(vRec);
        end loop; 
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
@@ -762,6 +845,7 @@ create or replace package body PDriverTv24 as
     vName  varchar2(100);
     vDesc  varchar2(2000);
     vPrice number;
+    vDetail varchar2(1000);
   begin
     vBody.put('price', pPrice);
     vBody.put('packet_id', pPacket);
@@ -771,7 +855,11 @@ create or replace package body PDriverTv24 as
        vName  := getString(vNode, 'name'); 
        vDesc  := getString(vNode, 'description');
        vPrice := vNode.get_Number('price');
-       vRec   := tv24_package_rec(null, null, vName, vDesc, vPrice, null);
+       vRec   := tv24_package_rec(null, null, vName, vDesc, vPrice, null, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_package_rec(null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
@@ -790,6 +878,7 @@ create or replace package body PDriverTv24 as
     vName  varchar2(100);
     vDesc  varchar2(2000);
     vPrice number;
+    vDetail varchar2(1000);
   begin
     getMethod(vUrl, vResp, vCode);
     if vCode = 200 then
@@ -800,7 +889,7 @@ create or replace package body PDriverTv24 as
            vName  := getString(vNode, 'name'); 
            vDesc  := getString(vNode, 'description');
            vPrice := vNode.get_Number('price');
-           vRec   := tv24_package_rec(vPar, null, vName, vDesc, vPrice, 1);
+           vRec   := tv24_package_rec(vPar, null, vName, vDesc, vPrice, 1, vCode, null);
            pipe row(vRec);
            vAvail := vNode.get_Array('available');
            for xi in 0 .. vAvail.get_size - 1 loop
@@ -809,10 +898,14 @@ create or replace package body PDriverTv24 as
                vName  := getString(vNode, 'name'); 
                vDesc  := getString(vNode, 'description');
                vPrice := vNode.get_Number('price');
-               vRec   := tv24_package_rec(vId, vPar, vName, vDesc, vPrice, 0);
+               vRec   := tv24_package_rec(vId, vPar, vName, vDesc, vPrice, 0, vCode, null);
                pipe row(vRec);
            end loop;
-       end loop; 
+       end loop;
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_package_rec(null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
     end if;
     return;  
   end;
