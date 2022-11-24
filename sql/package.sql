@@ -1,4 +1,4 @@
-create or replace package bp_tv24 as
+ï»¿create or replace package bp_tv24 as
     procedure auth( pPhone in varchar2
                   , pStatus out number
                   , pId out number);
@@ -149,23 +149,23 @@ create or replace package body PDriverTv24 as
   function translit( p_text in varchar2 ) return varchar2 as
     r varchar2(1000);
   begin
-    r := translate(p_text, 'ÀÁÂÃÄÅ¨ÇÈÉÊËÌÍÎÏĞÑÒÓÔÛİàáâãäå¸çèéêëìíîïğñòóôûı', 'ABVGDEEZIYKLMNOPRSTUAYEabvgdeeziyklmnoprstuaye');
-    r := replace(r, 'Æ', 'Zh');
-    r := replace(r, 'æ', 'zh');
-    r := replace(r, 'Õ', 'Kh');
-    r := replace(r, 'õ', 'kh');
-    r := replace(r, 'Ö', 'Ts');
-    r := replace(r, 'ö', 'ts');
-    r := replace(r, '×', 'Ch');
-    r := replace(r, '÷', 'ch');
-    r := replace(r, 'Ø', 'Sh');
-    r := replace(r, 'ø', 'sh');
-    r := replace(r, 'Ù', 'Shch');
-    r := replace(r, 'ù', 'shch');
-    r := replace(r, 'Ş', 'Yu');
-    r := replace(r, 'ş', 'yu');
-    r := replace(r, 'ß', 'Ya');
-    r := replace(r, 'ÿ', 'ya');
+    r := translate(p_text, 'ĞĞ‘Ğ’Ğ“Ğ”Ğ•ĞĞ—Ğ˜Ğ™ĞšĞ›ĞœĞĞĞŸĞ Ğ¡Ğ¢Ğ£Ğ¤Ğ«Ğ­Ğ°Ğ±Ğ²Ğ³Ğ´ĞµÑ‘Ğ·Ğ¸Ğ¹ĞºĞ»Ğ¼Ğ½Ğ¾Ğ¿Ñ€ÑÑ‚ÑƒÑ„Ñ‹Ñ', 'ABVGDEEZIYKLMNOPRSTUAYEabvgdeeziyklmnoprstuaye');
+    r := replace(r, 'Ğ–', 'Zh');
+    r := replace(r, 'Ğ¶', 'zh');
+    r := replace(r, 'Ğ¥', 'Kh');
+    r := replace(r, 'Ñ…', 'kh');
+    r := replace(r, 'Ğ¦', 'Ts');
+    r := replace(r, 'Ñ†', 'ts');
+    r := replace(r, 'Ğ§', 'Ch');
+    r := replace(r, 'Ñ‡', 'ch');
+    r := replace(r, 'Ğ¨', 'Sh');
+    r := replace(r, 'Ñˆ', 'sh');
+    r := replace(r, 'Ğ©', 'Shch');
+    r := replace(r, 'Ñ‰', 'shch');
+    r := replace(r, 'Ğ®', 'Yu');
+    r := replace(r, 'Ñ', 'yu');
+    r := replace(r, 'Ğ¯', 'Ya');
+    r := replace(r, 'Ñ', 'ya');
     return r;
   end;
 
