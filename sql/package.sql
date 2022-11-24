@@ -116,6 +116,8 @@ CREATE OR REPLACE type tv24_pause_list is table of tv24_pause_rec
 /
 
 create or replace package PDriverTv24 as
+  function translit( p_text in varchar2 ) return varchar2;
+
   function getPackages return tv24_package_list pipelined;
   function getAbonents return tv24_abonent_list pipelined;
   function getAbonentById(pId in number) return tv24_abonent_list pipelined;
@@ -125,6 +127,8 @@ create or replace package PDriverTv24 as
   function getSubscriptions(pId in number) return tv24_subscription_list pipelined;
   function getPauses(pId in number, pSub in varchar2) return tv24_pause_list pipelined;
   
+  function addAbonent(pUsername in varchar2, pFirst in varchar2, pLast in varchar2, pEmail in varchar2, pPhone in varchar2, pUid in number, pActive in number) return tv24_abonent_list pipelined;
+  function chgAbonent(pId in number, pUsername in varchar2, pFirst in varchar2, pLast in varchar2, pEmail in varchar2, pPhone in varchar2) return tv24_abonent_list pipelined;
   function setAbonentProvider(pId in number, pUid in number) return tv24_abonent_list pipelined;
   function setAbonentActive(pId in number, pActive in number) return tv24_abonent_list pipelined;
   function setAbonentPacketPrice(pId in number, pPacket in number, pPrice in number) return tv24_package_list pipelined;
@@ -141,6 +145,29 @@ create or replace package body PDriverTv24 as
 
   SERVICE_URL constant varchar2(100) default 'http://127.0.0.1:8092/tv24/'; -- 'http://api.24h.tv/v2/';
   TOKEN constant varchar2(100) default 'b196a328da2c0d8f0b99b589bde39cdacc8a9656';
+  
+  function translit( p_text in varchar2 ) return varchar2 as
+    r varchar2(1000);
+  begin
+    r := translate(p_text, 'ÀÁÂÃÄÅ¨ÇÈÉÊËÌÍÎÏÐÑÒÓÔÛÝàáâãäå¸çèéêëìíîïðñòóôûý', 'ABVGDEEZIYKLMNOPRSTUAYEabvgdeeziyklmnoprstuaye');
+    r := replace(r, 'Æ', 'Zh');
+    r := replace(r, 'æ', 'zh');
+    r := replace(r, 'Õ', 'Kh');
+    r := replace(r, 'õ', 'kh');
+    r := replace(r, 'Ö', 'Ts');
+    r := replace(r, 'ö', 'ts');
+    r := replace(r, '×', 'Ch');
+    r := replace(r, '÷', 'ch');
+    r := replace(r, 'Ø', 'Sh');
+    r := replace(r, 'ø', 'sh');
+    r := replace(r, 'Ù', 'Shch');
+    r := replace(r, 'ù', 'shch');
+    r := replace(r, 'Þ', 'Yu');
+    r := replace(r, 'þ', 'yu');
+    r := replace(r, 'ß', 'Ya');
+    r := replace(r, 'ÿ', 'ya');
+    return r;
+  end;
 
   procedure getMethod( p_url    in  varchar2
                      , o_out    out nclob 
@@ -321,6 +348,111 @@ create or replace package body PDriverTv24 as
     else
        vDetail := getString(vNode, 'detail');
        vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
+    end if;
+    return;  
+  end;
+  
+  function addAbonent(pUsername in varchar2, pFirst in varchar2, pLast in varchar2, pEmail in varchar2, pPhone in varchar2, pUid in number, pActive in number) return tv24_abonent_list pipelined as
+    vUrl   varchar2(100) default 'users?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_abonent_rec;
+    vId    number;
+    vUid   number;
+    vName  varchar2(500);
+    vFirst varchar2(500);
+    vLast  varchar2(500);
+    vPhone varchar2(100);
+    vEMail varchar2(500);
+    vActiv number default 0;
+    vDetail varchar2(1000);
+  begin
+    vBody.put('username', translit(pUsername));
+    vBody.put('first_name', translit(pFirst));
+    vBody.put('last_name', translit(pLast));
+    vBody.put('email', pEmail);
+    vBody.put('phone', pPhone);
+    if not pUid is null then   
+       vBody.put('provider_uid', pUid);
+    end if;
+    vBody.put('is_provider_free', FALSE);
+    vBody.put('is_active', pActive > 0);
+    postMethod(pUrl => vUrl, pText => vBody.stringify, oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := vNode.get_Number('id');
+       vUid   := vNode.get_Number('provider_uid');
+       vName  := getString(vNode, 'username'); 
+       vFirst := getString(vNode, 'first_name'); 
+       vLast  := getString(vNode, 'last_name');
+       vPhone := getString(vNode, 'phone'); 
+       vEMail := getString(vNode, 'email');
+       if vNode.get_Boolean('is_active') then
+          vActiv := 1;
+       end if; 
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
+       pipe row(vRec);
+    end if;
+    return;
+  end;
+
+  function chgAbonent(pId in number, pUsername in varchar2, pFirst in varchar2, pLast in varchar2, pEmail in varchar2, pPhone in varchar2) return tv24_abonent_list pipelined as
+    vUrl   varchar2(100) default 'users/' || pId || '?'; 
+    vResp  clob;
+    vCode  number;
+    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
+    vNode  JSON_OBJECT_T;
+    vRec   tv24_abonent_rec;
+    vId    number;
+    vUid   number;
+    vName  varchar2(500);
+    vFirst varchar2(500);
+    vLast  varchar2(500);
+    vPhone varchar2(100);
+    vEMail varchar2(500);
+    vActiv number default 0;
+    vDetail varchar2(1000);
+  begin
+    if not pUsername is null then
+       vBody.put('username', translit(pUsername));
+    end if;
+    if not pFirst is null then
+       vBody.put('first_name', translit(pFirst));
+    end if;
+    if not pLast is null then
+       vBody.put('last_name', translit(pLast));
+    end if;
+    if not pEmail is null then
+       vBody.put('email', pEmail);
+    end if;
+    if not pPhone is null then
+       vBody.put('phone', pPhone);
+    end if;
+    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'PATCH', oOut => vResp, oResult => vCode);
+    if vCode = 200 then
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := vNode.get_Number('id');
+       vUid   := vNode.get_Number('provider_uid');
+       vName  := getString(vNode, 'username'); 
+       vFirst := getString(vNode, 'first_name'); 
+       vLast  := getString(vNode, 'last_name');
+       vPhone := getString(vNode, 'phone'); 
+       vEMail := getString(vNode, 'email');
+       if vNode.get_Boolean('is_active') then
+          vActiv := 1;
+       end if; 
+       vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
+       pipe row(vRec);
+    else
+       vDetail := getString(vNode, 'detail');
+       vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
     return;  
