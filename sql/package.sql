@@ -251,7 +251,6 @@ create or replace package body PDriverTv24 as
     vUrl   varchar2(100) default 'users/' || pId || '/subscriptions/' || pSub || '?'; 
     vResp  clob;
     vCode  number;
-    vBody  JSON_OBJECT_T := JSON_OBJECT_T();
     vList  JSON_ARRAY_T;
     vNode  JSON_OBJECT_T;
     vPack  JSON_OBJECT_T;
@@ -267,33 +266,26 @@ create or replace package body PDriverTv24 as
     vEnd   Date;
     vDetail varchar2(1000);
   begin
-    postMethod(pUrl => vUrl, pText => vBody.stringify, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
+    postMethod(pUrl => vUrl, pText => null, pMethod => 'DELETE', oOut => vResp, oResult => vCode);
     if vCode = 200 then
-       vList := JSON_ARRAY_T.parse(vResp);
-       for ix IN 0 .. vList.get_size - 1 loop
-           vNode  := TREAT(vList.get(ix) AS json_object_t);
-           vId    := getString(vNode, 'id');
-           vStart := vNode.get_Timestamp('start_at');
-           vEnd   := vNode.get_Timestamp('end_at');
-           if vNode.get_Boolean('renew') then
-              vRenew := 1;
-           end if;
-           if vNode.get_Boolean('is_paused') then
-              vPause := 1;
-           end if;
-           vPack  := vNode.get_Object('packet');
-           vPId   := vPack.get_Number('id');
-           vPName := getString(vPack, 'name');
-           vPrice := vPack.get_Number('price');
-           if vPack.get_Boolean('base') then
-              vBase := 1;
-           end if;
-           vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd, vCode, null);
-           pipe row(vRec);
-       end loop; 
-    else
-       vDetail := getString(vNode, 'detail');
-       vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
+       vNode := JSON_OBJECT_T.parse(vResp);
+       vId    := getString(vNode, 'id');
+       vStart := vNode.get_Timestamp('start_at');
+       vEnd   := vNode.get_Timestamp('end_at');
+       if vNode.get_Boolean('renew') then
+          vRenew := 1;
+       end if;
+       if vNode.get_Boolean('is_paused') then
+          vPause := 1;
+       end if;
+       vPack  := vNode.get_Object('packet');
+       vPId   := vPack.get_Number('id');
+       vPName := getString(vPack, 'name');
+       vPrice := vPack.get_Number('price');
+       if vPack.get_Boolean('base') then
+          vBase := 1;
+       end if;
+       vRec   := tv24_subscription_rec(vId, vPId, vPName, vPrice, vBase, vRenew, vPause, vStart, vEnd, vCode, null);
        pipe row(vRec);
     end if;
     return;  
@@ -346,7 +338,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -388,15 +380,17 @@ create or replace package body PDriverTv24 as
        vName  := getString(vNode, 'username'); 
        vFirst := getString(vNode, 'first_name'); 
        vLast  := getString(vNode, 'last_name');
-       vPhone := getString(vNode, 'phone'); 
-       vEMail := getString(vNode, 'email');
+       vPhone := getString(vNode, 'phone');
+       if not vEMail is null then   
+          vEMail := getString(vNode, 'email');
+       end if;
        if vNode.get_Boolean('is_active') then
           vActiv := 1;
        end if; 
        vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -451,7 +445,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -492,7 +486,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -533,7 +527,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -564,7 +558,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -593,7 +587,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_pause_rec(vId, vStart, vEnd, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -627,7 +621,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -659,7 +653,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -690,7 +684,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_pause_rec(null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -741,7 +735,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -792,7 +786,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_subscription_rec(null, null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -835,7 +829,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -878,7 +872,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -917,7 +911,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_abonent_rec(vId, vName, vFirst, vLast, vPhone, vEMail, vUid, vActiv, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -960,7 +954,7 @@ create or replace package body PDriverTv24 as
            pipe row(vRec);
        end loop; 
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_abonent_rec(null, null, null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -990,7 +984,7 @@ create or replace package body PDriverTv24 as
        vRec   := tv24_package_rec(null, null, vName, vDesc, vPrice, null, vCode, null);
        pipe row(vRec);
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_package_rec(null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
@@ -1035,7 +1029,7 @@ create or replace package body PDriverTv24 as
            end loop;
        end loop;
     else
-       vDetail := getString(vNode, 'detail');
+       vDetail := getString(TREAT(JSON_OBJECT_T.parse(vResp).get('error') AS json_object_t), 'message');
        vRec   := tv24_package_rec(null, null, null, null, null, null, vCode, vDetail);
        pipe row(vRec);
     end if;
