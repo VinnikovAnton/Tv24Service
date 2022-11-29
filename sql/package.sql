@@ -1,4 +1,4 @@
-﻿create or replace package bp_tv24 as
+create or replace package bp_tv24 as
     procedure auth( pPhone in varchar2
                   , pStatus out number
                   , pId out number);
@@ -295,6 +295,7 @@ create or replace package body PDriverTv24 as
     vUrl   varchar2(100) default 'users/' || pId || '/subscriptions?'; 
     vResp  clob;
     vCode  number;
+    vReq   JSON_ARRAY_T := JSON_ARRAY_T();
     vBody  JSON_OBJECT_T := JSON_OBJECT_T();
     vList  JSON_ARRAY_T;
     vNode  JSON_OBJECT_T;
@@ -313,7 +314,8 @@ create or replace package body PDriverTv24 as
   begin
     vBody.put('packet_id', pPacket);
     vBody.put('renew', pRenew > 0);
-    postMethod(pUrl => vUrl, pText => vBody.stringify, oOut => vResp, oResult => vCode);
+    vReq.append(vBody);
+    postMethod(pUrl => vUrl, pText => vReq.stringify, oOut => vResp, oResult => vCode);
     if vCode = 200 then
        vList := JSON_ARRAY_T.parse(vResp);
        for ix IN 0 .. vList.get_size - 1 loop
