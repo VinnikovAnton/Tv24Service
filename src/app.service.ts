@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from './database/database.service';
 import { AuthResult } from './interfaces/authresult';
+import { AuthError } from './interfaces/autherror';
 import { ContSuccess } from './interfaces/contsuccess';
 import { StatusSuccess } from './interfaces/statussuccess';
 import OracleDB = require('oracledb');
@@ -10,35 +11,50 @@ export class AppService {
 
   constructor(private readonly database: DatabaseService) {}
 
-  async auth(phone: string, logger): Promise<AuthResult> {
-    let r: AuthResult = new AuthResult();
+  async auth(phone: string, logger): Promise<AuthResult | AuthError> {
     try {
       const sp = await this.database.getByQuery(
         `begin
-            Wink.BP_Tv24.auth(
+            Billing.BP_Tv24.auth(
                 :phone,
+                :id,
                 :stat,
-                :id
+                :err_message
             );
          end;`, 
          {
             phone: { dir: OracleDB.BIND_IN, val: phone },
+            id: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
             stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-            id: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER }
+            err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
          }
       );
       const stat = (<any>sp.outBinds).stat; 
-      r.user_id = null;
+      const errMessage = (<any>sp.outBinds).err_message;
       if (stat >= 0) {
+        let r: AuthResult = new AuthResult();
         r.user_id = (<any>sp.outBinds).id;
+        console.log('SUCCESS: user_id = ' + r.user_id);
+        logger.info('SUCCESS: user_id = ' + r.user_id);
+          return r;
+      } else {
+        let e: AuthError = new AuthError();
+        console.log(errMessage);
+        logger.log(errMessage);
+        e.status = -1;
+        e.err = stat;
+        e.errmsg = errMessage;
+        return e;
       }
-      return r;
     } catch (error) {
       console.log(error);
       logger.error(error);
-      r = null;
+      let e: AuthError = new AuthError();
+      e.status = -1;
+      e.err = -2;
+      e.errmsg = error.message;
+      return e;
     }
-    return r;
   }
 
   async cont(id: number, sum: number, trf_id: number, tariff: string, start: string, logger): Promise<ContSuccess> {

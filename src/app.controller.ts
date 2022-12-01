@@ -51,18 +51,7 @@ export class AppController {
   async auth(@Res() res, @Query('ip') ip: string, @Query('phone') phone: string, @Query('mbr_id') mbr_id: string): Promise<AuthResult | AuthError> {
     console.log('AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id);
     logger.info('AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id);
-    const r = await this.service.auth(phone, logger);
-    if ((r === null) || (r.user_id === null)) {
-      let e: AuthError = new AuthError();
-      e.status = -1;
-      e.err = 404;
-      e.errmsg = 'Абонент [' + phone + '] не найден';
-      console.log('FAIL: ' + e.errmsg);
-      logger.info('FAIL: ' + e.errmsg);
-      return res.status(HttpStatus.NOT_FOUND).json(e);
-    }
-    console.log('SUCCESS: user_id = ' + r.user_id);
-    logger.info('SUCCESS: user_id = ' + r.user_id);
+    let r = await this.service.auth(phone, logger);
     return res.status(HttpStatus.OK).json(r);
   }
 
