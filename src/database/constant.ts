@@ -3,5 +3,6 @@ export const appConstants = {
     db_password: 'dbyr2020',
     db_host: '10.67.192.12',
     db_port: '1521',
-    db_service: 'porridge'
+    db_service: 'porridge',
+    db_libDir: 'C:\\Oracle\\product\\instantclient_19_10\\'
 }

@@ -1,5 +1,5 @@
-import { Controller, HttpStatus, Post, Query, Res } from '@nestjs/common';
-import { ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { Controller, HttpStatus, Post, Query, Req, Res, Body } from '@nestjs/common';
+import { ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { AuthError } from './interfaces/autherror';
 import { AuthResult } from './interfaces/authresult';
@@ -7,6 +7,8 @@ import { ContError } from './interfaces/conterror';
 import { ContSuccess } from './interfaces/contsuccess';
 import { StatusError } from './interfaces/statuserror';
 import { StatusSuccess } from './interfaces/statussuccess';
+import { PacketRequest } from './interfaces/packetrequest';
+import { DelSubscriptRq } from './interfaces/delsubscriptrq';
 
 var winston = require('winston');
 require('winston-daily-rotate-file');
@@ -49,9 +51,19 @@ export class AppController {
   @ApiOkResponse({ description: 'Successfully.'})
   @ApiNotFoundResponse({ description: 'Not Found.'})
   async auth(@Res() res, @Query('ip') ip: string, @Query('phone') phone: string, @Query('mbr_id') mbr_id: string): Promise<AuthResult | AuthError> {
-    console.log('AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id);
-    logger.info('AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id);
+    const logStr = 'AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id;
+    console.log(logStr);
+    logger.info(logStr);
     let r = await this.service.auth(phone, logger);
+    if (r instanceof AuthResult) {
+      const logStr = 'SUCCESS: user_id = ' + r.user_id;
+      console.log(logStr);
+      logger.info(logStr);
+    } else {
+      const logStr = 'FAIL: status=' + r.status + ', err=' + r.err + ', errmsg=' + r.errmsg;
+      console.log(logStr);
+      logger.error(logStr);
+    }
     return res.status(HttpStatus.OK).json(r);
   }
 
@@ -66,21 +78,18 @@ export class AppController {
   @ApiResponse({ type: ContSuccess })
   @ApiOkResponse({ description: 'Successfully.'})
   async cont(@Res() res, @Query('user_id') user_id: number, @Query('sum') sum: number, @Query('cont_id') cont_id: number, @Query('trf_id') trf_id: number, @Query('message') message: string, @Query('start') start: string): Promise<ContSuccess | ContError> {
-    console.log('CONT: user_id = ' + user_id + ', sum = ' + sum + ', id = ' + cont_id + ', tariff = ' + message + '(' + trf_id + '), from = ' + start);
-    logger.info('CONT: user_id = ' + user_id + ', sum = ' + sum + ', id = ' + cont_id + ', tariff = ' + message + '(' + trf_id + '), from = ' + start);
+    const logStr = 'CONT: user_id = ' + user_id + ', sum = ' + sum + ', cont_id = ' + cont_id + ', tariff = ' + message + '(' + trf_id + '), from = ' + start;
+    console.log(logStr);
+    logger.info(logStr);
     let r = await this.service.cont(user_id, sum, trf_id, message, start, logger);
-    if (r.status < 0) {
-      let e: ContError = new ContError();
-      e.status = r.status;
-      if (e.status == -1) {
-        e.errmsg = 'Абонент [' + user_id + '] не найден';
-      }
-      if (e.status == -2) {
-        e.errmsg = 'Недостаточно денежных средств';
-      }
-      console.log('FAIL: ' + e.errmsg);
-      logger.info('FAIL: ' + e.errmsg);
-      return res.status(HttpStatus.OK).json(e);
+    if (r instanceof ContSuccess) {
+      const logStr = 'SUCCESS: chr_id = ' + r.id;
+      console.log(logStr);
+      logger.info(logStr);
+    } else {
+      const logStr = 'FAIL: status = ' + r.status + ', eeror_message = ' + r.errmsg;
+      console.log(logStr);
+      logger.error(logStr);
     }
     return res.status(HttpStatus.OK).json(r);
   }
@@ -89,27 +98,23 @@ export class AppController {
   @ApiOperation({description: 'Запрос на подключение пакета', summary: 'Запрос на подключение пакета'})
   @ApiQuery({name: 'user_id', type: 'number', description: 'ID пользователя', required: true})
   @ApiQuery({name: 'trf_id', type: 'number', description: 'ID тарифа', required: false})
+  @ApiBody({ type: PacketRequest })
   @ApiResponse({ type: StatusSuccess })
   @ApiOkResponse({ description: 'Successfully.'})
-  async packet(@Res() res, @Query('user_id') user_id: number, @Query('trf_id') trf_id: number): Promise<StatusSuccess | StatusError> {
-    console.log('PACKET: user_id = ' + user_id + ', tariff = ' + trf_id);
-    logger.info('PACKET: user_id = ' + user_id + ', tariff = ' + trf_id);
-    let r = await this.service.packet(user_id, trf_id, logger);
-    if (r.status < 0) {
-      let e: StatusError = new StatusError();
-      e.status = r.status;
-      if (e.status == -1) {
-        e.errmsg = 'Абонент [' + user_id + '] не найден';
-      }
-      if (e.status == -2) {
-        e.errmsg = 'Недостаточно денежных средств';
-      }
-      if (e.status == -3) {
-        e.errmsg = 'Тариф не найден';
-      }
-      console.log('FAIL: ' + e.errmsg);
-      logger.info('FAIL: ' + e.errmsg);
-      return res.status(HttpStatus.OK).json(e);
+  async packet(@Res() res, @Query('user_id') user_id: number, @Query('trf_id') trf_id: number, @Body() body: PacketRequest): Promise<StatusSuccess | StatusError> {
+    const price = body.packet.price;
+    const logStr = 'PACKET: user_id = ' + user_id + ', tariff = ' + trf_id;
+    console.log(logStr);
+    logger.info(logStr);
+    let r = await this.service.packet(user_id, trf_id, price, logger);
+    if (r instanceof StatusSuccess) {
+      const logStr = 'SUCCESS';
+      console.log(logStr);
+      logger.info(logStr);
+    } else {
+      const logStr = 'FAIL: status = ' + r.status + ', err_message = ' + r.errmsg;
+      console.log(logStr);
+      logger.error(logStr);
     }
     return res.status(HttpStatus.OK).json(r);
   }
@@ -120,22 +125,20 @@ export class AppController {
   @ApiQuery({name: 'sub_id', type: 'number', description: 'ID подписки', required: false})
   @ApiResponse({ type: StatusSuccess })
   @ApiOkResponse({ description: 'Successfully.'})
-  async del(@Res() res, @Query('user_id') user_id: number, @Query('sub_id') sub_id: number): Promise<StatusSuccess | StatusError> {
-    console.log('DELETE_SUBSCRIPTION: user_id = ' + user_id + ', tariff = ' + sub_id);
-    logger.info('DELETE_SUBSCRIPTION: user_id = ' + user_id + ', tariff = ' + sub_id);
-    let r = await this.service.del(user_id, sub_id, logger);
-    if (r.status < 0) {
-      let e: StatusError = new StatusError();
-      e.status = r.status;
-      if (e.status == -1) {
-        e.errmsg = 'Абонент [' + user_id + '] не найден';
-      }
-      if (e.status == -4) {
-        e.errmsg = 'Подписка не найдена';
-      }
-      console.log('FAIL: ' + e.errmsg);
-      logger.info('FAIL: ' + e.errmsg);
-      return res.status(HttpStatus.OK).json(e);
+  async del(@Res() res, @Query('user_id') user_id: number, @Query('sub_id') sub_id: number, @Body() delSubRq: DelSubscriptRq): Promise<StatusSuccess | StatusError> {
+    const packetId = delSubRq.subscription.packet.id;
+    const logStr = 'DELETE_SUBSCRIPTION: user_id = ' + user_id + ', subscription_id = ' + sub_id + ', packet_id = ' + packetId;
+    console.log(logStr);
+    logger.info(logStr);
+    let r = await this.service.del(user_id, sub_id, packetId, logger);
+    if (r instanceof StatusSuccess) {
+      const logStr = 'SUCCESS';
+      console.log(logStr);
+      logger.info(logStr);
+    } else {
+      const logStr = 'FAIL: status = ' + r.status + ', err_message = ' + r.errmsg;
+      console.log(logStr);
+      logger.error(logStr);
     }
     return res.status(HttpStatus.OK).json(r);
   }

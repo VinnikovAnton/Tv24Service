@@ -45,3 +45,7 @@ export class DatabaseService {
     }
   }
 }
+
+OracleDB.initOracleClient(
+  { libDir: appConstants.db_libDir}
+);

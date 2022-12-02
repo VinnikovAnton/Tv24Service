@@ -3,7 +3,9 @@ import { DatabaseService } from './database/database.service';
 import { AuthResult } from './interfaces/authresult';
 import { AuthError } from './interfaces/autherror';
 import { ContSuccess } from './interfaces/contsuccess';
+import { ContError } from './interfaces/conterror';
 import { StatusSuccess } from './interfaces/statussuccess';
+import { StatusError } from './interfaces/statuserror';
 import OracleDB = require('oracledb');
 
 @Injectable()
@@ -34,21 +36,18 @@ export class AppService {
       if (stat >= 0) {
         let r: AuthResult = new AuthResult();
         r.user_id = (<any>sp.outBinds).id;
-        console.log('SUCCESS: user_id = ' + r.user_id);
-        logger.info('SUCCESS: user_id = ' + r.user_id);
-          return r;
+        await this.database.connection.commit;
+        return r;
       } else {
+        await this.database.connection.rollback;
         let e: AuthError = new AuthError();
-        console.log(errMessage);
-        logger.log(errMessage);
         e.status = -1;
         e.err = stat;
         e.errmsg = errMessage;
         return e;
       }
     } catch (error) {
-      console.log(error);
-      logger.error(error);
+      await this.database.connection.rollback;
       let e: AuthError = new AuthError();
       e.status = -1;
       e.err = -2;
@@ -57,19 +56,19 @@ export class AppService {
     }
   }
 
-  async cont(id: number, sum: number, trf_id: number, tariff: string, start: string, logger): Promise<ContSuccess> {
-    let r: ContSuccess = new ContSuccess();
+  async cont(id: number, sum: number, trf_id: number, tariff: string, start: string, logger): Promise<ContSuccess | ContError> {
     try {
       const sp = await this.database.getByQuery(
         `begin
-            Wink.BP_Tv24.cont(
+            Billing.BP_Tv24.cont(
                 :id,
                 :val,
                 :trf,
                 :tar,
                 :start,
                 :stat,
-                :charge
+                :charge,
+                :err_message
             );
          end;`, 
          {
@@ -79,72 +78,113 @@ export class AppService {
           tar: { dir: OracleDB.BIND_IN, val: tariff },
           start: { dir: OracleDB.BIND_IN, val: start },
           stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-          charge: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER }
+          charge: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
         }
       );
-      r.status = (<any>sp.outBinds).stat;
-      if (r.status >= 0) {
+      const status = (<any>sp.outBinds).stat;
+      const errMessage = (<any>sp.outBinds).err_message;
+      if (status == 1) {
+        let r: ContSuccess = new ContSuccess();
+        r.status = status;
         r.id = (<any>sp.outBinds).charge;
+        return r;
+      } else {
+        let e: ContError = new ContError();
+        e.status = status;
+        e.errmsg = errMessage;
+        return e;
       }
-      return r;
     } catch (error) {
-      console.log(error);
-      logger.error(error);
-      r.status = -1;
+      let e: ContError = new ContError();
+      e.status = -3;
+      e.errmsg = error.message;
+      return e;
     }
-    return r;
   }
 
-  async packet(id: number, trf_id: number, logger): Promise<StatusSuccess> {
-    let r: StatusSuccess = new StatusSuccess();
+  async packet(id: number, trf_id, price: number, logger): Promise<StatusSuccess | StatusError> {
+    let logStr = `id=${id}, trf_id=${trf_id}`;
     try {
-      const sp = await this.database.getByQuery(
+            const sp = await this.database.getByQuery(
         `begin
-            Wink.BP_Tv24.pack(
+            Billing.BP_Tv24.pack(
                 :id,
                 :trf,
-                :stat
+                :price,
+                :stat,
+                :err_message
             );
          end;`, 
          {
           id: { dir: OracleDB.BIND_IN, val: id },
           trf: { dir: OracleDB.BIND_IN, val: trf_id },
-          stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER }
+          price: { dir: OracleDB.BIND_IN, val: price },
+          stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
         }
       );
-      r.status = (<any>sp.outBinds).stat;
+      const status = (<any>sp.outBinds).stat;
+      const err_message = (<any>sp.outBinds).err_message;
+      if (status == 1) {
+        await this.database.connection.commit;
+        let r: StatusSuccess = new StatusSuccess();
+        r.status = status;
+        return r;
+      } else {
+        await this.database.connection.rollback;
+        let e: StatusError = new StatusError();
+        e.status = status;
+        e.errmsg = err_message;
+        return e;
+      }
     } catch (error) {
-      console.log(error);
-      logger.error(error);
-      r = null;
+      await this.database.connection.rollback;
+      let e: StatusError = new StatusError();
+      e.status = -3;
+      e.errmsg = error.message;
+      return e;
     }
-    return r;
   }
 
-  async del(id: number, sub_id: number, logger): Promise<StatusSuccess> {
-    let r: StatusSuccess = new StatusSuccess();
+  async del(id: number, sub_id: number, packet_id: number, logger): Promise<StatusSuccess | StatusError> {
     try {
       const sp = await this.database.getByQuery(
         `begin
-            Wink.BP_Tv24.dels(
+            Billing.BP_Tv24.dels(
                 :id,
                 :sub,
-                :stat
+                :packet_id,
+                :stat,
+                :err_message
             );
          end;`, 
          {
           id: { dir: OracleDB.BIND_IN, val: id },
           sub: { dir: OracleDB.BIND_IN, val: sub_id },
-          stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER }
+          packet_id: { dir: OracleDB.BIND_IN, val: packet_id },
+          stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
         }
       );
-      r.status = (<any>sp.outBinds).stat;
+      const status = (<any>sp.outBinds).stat;
+      if (status == 1) {
+        let r: StatusSuccess = new StatusSuccess();
+        r.status = status
+        return r;
+      } else {
+        let e: StatusError = new StatusError();
+        e.status = status;
+        e.errmsg =  (<any>sp.outBinds).err_message;
+        return e;
+      }
     } catch (error) {
-      console.log(error);
-      logger.error(error);
-      r = null;
+      await this.database.connection.rollback;
+      let e: StatusError = new StatusError();
+      e.status = -3;
+      e.errmsg = error.message;
+      return e;
     }
-    return r;
   }
 
 }
