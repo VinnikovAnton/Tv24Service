@@ -1,10 +1,9 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class Packet {
+  @ApiProperty({ description: 'ID канала' })
+  id: number;
 
-    @ApiProperty({description: 'ID канала'})
-    id: number;
-
-    @ApiProperty({description: 'Цена'})
-    price: number;
+  @ApiProperty({ description: 'Цена' })
+  price: number;
 }

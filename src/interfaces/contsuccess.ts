@@ -1,9 +1,9 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class ContSuccess {
-    @ApiProperty({description: 'ID списания'})
-    id: number;
+  @ApiProperty({ description: 'ID списания' })
+  id: number;
 
-    @ApiProperty({description: 'Статус'})
-    status: number;
+  @ApiProperty({ description: 'Статус' })
+  status: number;
 }

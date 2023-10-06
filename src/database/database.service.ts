@@ -7,8 +7,8 @@ export class DatabaseService {
   connection: OracleDB.Connection | null = null;
 
   async getByQuery<T>(
-    query: string, 
-    params?: Array<string | number> | { [key: string]: OracleDB.BindParameter }
+    query: string,
+    params?: Array<string | number> | { [key: string]: OracleDB.BindParameter },
   ): Promise<OracleDB.Result<T>> {
     try {
       const r: any = await this.connection.execute(query, params);
@@ -18,17 +18,22 @@ export class DatabaseService {
       console.log(error);
       await this.onApplicationShutdown();
       await this.onApplicationBootstrap();
-      console.log("ORA Reconnected");
+      console.log('ORA Reconnected');
       return await this.connection.execute(query, params);
     }
   }
 
   async onApplicationBootstrap() {
     try {
-      this.connection = await OracleDB.getConnection( {
+      this.connection = await OracleDB.getConnection({
         user: appConstants.db_user,
         password: appConstants.db_password,
-        connectString: appConstants.db_host + ":" + appConstants.db_port + "/" + appConstants.db_service
+        connectString:
+          appConstants.db_host +
+          ':' +
+          appConstants.db_port +
+          '/' +
+          appConstants.db_service,
       });
     } catch (error) {
       console.log(error);
@@ -46,6 +51,4 @@ export class DatabaseService {
   }
 }
 
-OracleDB.initOracleClient(
-  { libDir: appConstants.db_libDir}
-);
+OracleDB.initOracleClient({ libDir: appConstants.db_libDir });

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import OracleDB = require('oracledb');
 import { DatabaseService } from './database/database.service';
 import { AuthResult } from './interfaces/authresult';
 import { AuthError } from './interfaces/autherror';
@@ -6,14 +7,12 @@ import { ContSuccess } from './interfaces/contsuccess';
 import { ContError } from './interfaces/conterror';
 import { StatusSuccess } from './interfaces/statussuccess';
 import { StatusError } from './interfaces/statuserror';
-import OracleDB = require('oracledb');
 
 @Injectable()
 export class AppService {
-
   constructor(private readonly database: DatabaseService) {}
 
-  async auth(phone: string, logger): Promise<AuthResult | AuthError> {
+  async auth(phone: string): Promise<AuthResult | AuthError> {
     try {
       const sp = await this.database.getByQuery(
         `begin
@@ -23,24 +22,24 @@ export class AppService {
                 :stat,
                 :err_message
             );
-         end;`, 
-         {
-            phone: { dir: OracleDB.BIND_IN, val: phone },
-            id: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-            stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-            err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
-         }
+         end;`,
+        {
+          phone: { dir: OracleDB.BIND_IN, val: phone },
+          id: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
+          stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING },
+        },
       );
-      const stat = (<any>sp.outBinds).stat; 
+      const stat = (<any>sp.outBinds).stat;
       const errMessage = (<any>sp.outBinds).err_message;
       if (stat >= 0) {
-        let r: AuthResult = new AuthResult();
+        const r: AuthResult = new AuthResult();
         r.user_id = (<any>sp.outBinds).id;
         await this.database.connection.commit;
         return r;
       } else {
         await this.database.connection.rollback;
-        let e: AuthError = new AuthError();
+        const e: AuthError = new AuthError();
         e.status = -1;
         e.err = stat;
         e.errmsg = errMessage;
@@ -48,7 +47,7 @@ export class AppService {
       }
     } catch (error) {
       await this.database.connection.rollback;
-      let e: AuthError = new AuthError();
+      const e: AuthError = new AuthError();
       e.status = -1;
       e.err = -2;
       e.errmsg = error.message;
@@ -56,7 +55,13 @@ export class AppService {
     }
   }
 
-  async cont(id: number, sum: number, trf_id: number, tariff: string, start: string, logger): Promise<ContSuccess | ContError> {
+  async cont(
+    id: number,
+    sum: number,
+    trf_id: number,
+    tariff: string,
+    start: string,
+  ): Promise<ContSuccess | ContError> {
     try {
       const sp = await this.database.getByQuery(
         `begin
@@ -70,8 +75,8 @@ export class AppService {
                 :charge,
                 :err_message
             );
-         end;`, 
-         {
+         end;`,
+        {
           id: { dir: OracleDB.BIND_IN, val: id },
           val: { dir: OracleDB.BIND_IN, val: sum },
           trf: { dir: OracleDB.BIND_IN, val: trf_id },
@@ -79,34 +84,37 @@ export class AppService {
           start: { dir: OracleDB.BIND_IN, val: start },
           stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
           charge: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
-        }
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING },
+        },
       );
       const status = (<any>sp.outBinds).stat;
       const errMessage = (<any>sp.outBinds).err_message;
       if (status == 1) {
-        let r: ContSuccess = new ContSuccess();
+        const r: ContSuccess = new ContSuccess();
         r.status = status;
         r.id = (<any>sp.outBinds).charge;
         return r;
       } else {
-        let e: ContError = new ContError();
+        const e: ContError = new ContError();
         e.status = status;
         e.errmsg = errMessage;
         return e;
       }
     } catch (error) {
-      let e: ContError = new ContError();
+      const e: ContError = new ContError();
       e.status = -3;
       e.errmsg = error.message;
       return e;
     }
   }
 
-  async packet(id: number, trf_id, price: number, logger): Promise<StatusSuccess | StatusError> {
-    let logStr = `id=${id}, trf_id=${trf_id}`;
+  async packet(
+    id: number,
+    trf_id,
+    price: number,
+  ): Promise<StatusSuccess | StatusError> {
     try {
-            const sp = await this.database.getByQuery(
+      const sp = await this.database.getByQuery(
         `begin
             Billing.BP_Tv24.pack(
                 :id,
@@ -115,39 +123,43 @@ export class AppService {
                 :stat,
                 :err_message
             );
-         end;`, 
-         {
+         end;`,
+        {
           id: { dir: OracleDB.BIND_IN, val: id },
           trf: { dir: OracleDB.BIND_IN, val: trf_id },
           price: { dir: OracleDB.BIND_IN, val: price },
           stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
-        }
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING },
+        },
       );
       const status = (<any>sp.outBinds).stat;
       const err_message = (<any>sp.outBinds).err_message;
       if (status == 1) {
         await this.database.connection.commit;
-        let r: StatusSuccess = new StatusSuccess();
+        const r: StatusSuccess = new StatusSuccess();
         r.status = status;
         return r;
       } else {
         await this.database.connection.rollback;
-        let e: StatusError = new StatusError();
+        const e: StatusError = new StatusError();
         e.status = status;
         e.errmsg = err_message;
         return e;
       }
     } catch (error) {
       await this.database.connection.rollback;
-      let e: StatusError = new StatusError();
+      const e: StatusError = new StatusError();
       e.status = -3;
       e.errmsg = error.message;
       return e;
     }
   }
 
-  async del(id: number, sub_id: number, packet_id: number, logger): Promise<StatusSuccess | StatusError> {
+  async del(
+    id: number,
+    sub_id: number,
+    packet_id: number,
+  ): Promise<StatusSuccess | StatusError> {
     try {
       const sp = await this.database.getByQuery(
         `begin
@@ -158,33 +170,36 @@ export class AppService {
                 :stat,
                 :err_message
             );
-         end;`, 
-         {
+         end;`,
+        {
           id: { dir: OracleDB.BIND_IN, val: id },
           sub: { dir: OracleDB.BIND_IN, val: sub_id },
           packet_id: { dir: OracleDB.BIND_IN, val: packet_id },
           stat: { dir: OracleDB.BIND_OUT, type: OracleDB.NUMBER },
-          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING }
-        }
+          err_message: { dir: OracleDB.BIND_OUT, type: OracleDB.STRING },
+        },
       );
       const status = (<any>sp.outBinds).stat;
       if (status == 1) {
-        let r: StatusSuccess = new StatusSuccess();
-        r.status = status
+        const r: StatusSuccess = new StatusSuccess();
+        r.status = status;
         return r;
       } else {
-        let e: StatusError = new StatusError();
+        const e: StatusError = new StatusError();
         e.status = status;
-        e.errmsg =  (<any>sp.outBinds).err_message;
+        e.errmsg = (<any>sp.outBinds).err_message;
         return e;
       }
     } catch (error) {
       await this.database.connection.rollback;
-      let e: StatusError = new StatusError();
+      const e: StatusError = new StatusError();
       e.status = -3;
       e.errmsg = error.message;
       return e;
     }
   }
 
+  getHello(): string {
+    return 'Hello World!';
+  }
 }

@@ -1,6 +1,6 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class StatusSuccess {
-    @ApiProperty({description: 'Статус'})
-    status: number;
+  @ApiProperty({ description: 'Статус' })
+  status: number;
 }
