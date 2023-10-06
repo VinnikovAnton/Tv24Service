@@ -28,7 +28,7 @@ var transport = new winston.transports.DailyRotateFile({
     datePattern: 'YYYY-MM-DD',
     zippedArchive: true,
     maxSize: '20m',
-    maxFiles: '14d'
+//    maxFiles: '14d'
 });
 
 var logger = winston.createLogger({
@@ -40,7 +40,8 @@ var logger = winston.createLogger({
 
 @Controller()
 export class AppController {
-  constructor(private readonly service: AppService) {}
+  //constructor(private readonly service: AppService) {}
+  constructor(private readonly appService: AppService) {}
 
   @Post('auth?')
   @ApiOperation({description: 'Авторизация', summary: 'Авторизация'})
@@ -54,7 +55,7 @@ export class AppController {
     const logStr = 'AUTH: ip = ' + ip + ', phone = ' + phone + ', id = ' + mbr_id;
     console.log(logStr);
     logger.info(logStr);
-    let r = await this.service.auth(phone, logger);
+    let r = await this.appService.auth(phone, logger);
     if (r instanceof AuthResult) {
       const logStr = 'SUCCESS: user_id = ' + r.user_id;
       console.log(logStr);
@@ -81,7 +82,7 @@ export class AppController {
     const logStr = 'CONT: user_id = ' + user_id + ', sum = ' + sum + ', cont_id = ' + cont_id + ', tariff = ' + message + '(' + trf_id + '), from = ' + start;
     console.log(logStr);
     logger.info(logStr);
-    let r = await this.service.cont(user_id, sum, trf_id, message, start, logger);
+    let r = await this.appService.cont(user_id, sum, trf_id, message, start, logger);
     if (r instanceof ContSuccess) {
       const logStr = 'SUCCESS: chr_id = ' + r.id;
       console.log(logStr);
@@ -103,10 +104,13 @@ export class AppController {
   @ApiOkResponse({ description: 'Successfully.'})
   async packet(@Res() res, @Query('user_id') user_id: number, @Query('trf_id') trf_id: number, @Body() body: PacketRequest): Promise<StatusSuccess | StatusError> {
     const price = body.packet.price;
-    const logStr = 'PACKET: user_id = ' + user_id + ', tariff = ' + trf_id;
+    const bodyTv24UserId = body.user.id;
+    const bodyTv24Phone = body.user.phone;
+    const bodyTv24BillContractId = body.user.provider_uid;
+    const logStr = `PACKET: user_id = ${user_id}, tariff = ${trf_id}, price=${price}, bodyTv24UserId = ${bodyTv24UserId}, bodyTv24Phone = ${bodyTv24Phone}, bodyTv24BillContractId = ${bodyTv24BillContractId}`;
     console.log(logStr);
     logger.info(logStr);
-    let r = await this.service.packet(user_id, trf_id, price, logger);
+    let r = await this.appService.packet(user_id, trf_id, price, logger);
     if (r instanceof StatusSuccess) {
       const logStr = 'SUCCESS';
       console.log(logStr);
@@ -120,7 +124,7 @@ export class AppController {
   }
 
   @Post('delete_subscription?')
-  @ApiOperation({description: 'Запрос на удаление подписки', summary: 'Запрос на подключение пакета'})
+  @ApiOperation({description: 'Запрос на удаление подписки', summary: 'Запрос на удаление пакета'})
   @ApiQuery({name: 'user_id', type: 'number', description: 'ID пользователя', required: true})
   @ApiQuery({name: 'sub_id', type: 'number', description: 'ID подписки', required: false})
   @ApiResponse({ type: StatusSuccess })
@@ -130,7 +134,7 @@ export class AppController {
     const logStr = 'DELETE_SUBSCRIPTION: user_id = ' + user_id + ', subscription_id = ' + sub_id + ', packet_id = ' + packetId;
     console.log(logStr);
     logger.info(logStr);
-    let r = await this.service.del(user_id, sub_id, packetId, logger);
+    let r = await this.appService.del(user_id, sub_id, packetId, logger);
     if (r instanceof StatusSuccess) {
       const logStr = 'SUCCESS';
       console.log(logStr);
